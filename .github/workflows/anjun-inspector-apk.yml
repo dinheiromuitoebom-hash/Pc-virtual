@@ -1,4 +1,4 @@
-name: Build Anjun Inspector APK
+name: Build Anjun Inspector Manual APK
 on:
   workflow_dispatch:
   push:
@@ -35,8 +35,12 @@ jobs:
       - uses: gradle/actions/setup-gradle@ed408507eac070d1f99cc633dbcf757c94c7933a # v4
         with:
           gradle-version: '8.9'
-      - name: Compile installable debug APK
+      - name: Compile manual APK
         run: gradle assembleDebug --no-daemon --stacktrace
+      - name: Verify removed sensitive capabilities
+        run: |
+          mkdir -p dist
+          python3 scripts/verify_manual_apk.py app/build/outputs/apk/debug/app-debug.apk > dist/capabilities.json
       - name: Verify signature and prepare download
         run: |
           set -euo pipefail
@@ -45,12 +49,12 @@ jobs:
           "$ANDROID_HOME/build-tools/34.0.0/apksigner" verify --verbose --print-certs "$apk"
           "$ANDROID_HOME/build-tools/34.0.0/aapt" dump badging "$apk"
           mkdir -p dist
-          cp "$apk" dist/AnjunAutoInspector-v0.1.1.apk
+          cp "$apk" dist/AnjunAutoInspector-v0.2.0-manual.apk
           cd dist
-          sha256sum AnjunAutoInspector-v0.1.1.apk > SHA256SUMS.txt
+          sha256sum AnjunAutoInspector-v0.2.0-manual.apk > SHA256SUMS.txt
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
-          name: AnjunAutoInspector-debug-apk
+          name: AnjunAutoInspector-manual-apk
           path: anjun-inspector/dist/*
           if-no-files-found: error
           retention-days: 30
@@ -61,14 +65,17 @@ jobs:
           GH_REPO: ${{ github.repository }}
         run: |
           set -euo pipefail
-          release_tag="anjun-inspector-v0.1.1-${GITHUB_RUN_NUMBER}-${GITHUB_RUN_ATTEMPT}"
+          release_tag="anjun-inspector-v0.2.0-manual-${GITHUB_RUN_NUMBER}-${GITHUB_RUN_ATTEMPT}"
           cat > "$RUNNER_TEMP/anjun-release-notes.md" <<'NOTES'
-          APK Android 8.0+ de observação local da estrutura de telas.
+          APK Android 8.0+ para organizar capturas de tela escolhidas pelo usuário.
           Versão experimental assinada com chave de debug, compilada pelo GitHub Actions.
 
-          Abra o APK, ative o serviço nas configurações de acessibilidade e navegue manualmente pela Anjun. O relatório contém somente tipos e contagens de elementos.
-          Esta versão ainda não inclui painel flutuante, Roteia ou navegação automática. Não realiza baixas nem envia dados.
+          Edição manual: selecione uma captura, informe título e notas, salve e exporte o ZIP quando desejar.
+          O serviço e o código de acessibilidade foram removidos. Esta edição não possui permissões de internet, SMS, notificações ou sobreposição e não lê outros aplicativos automaticamente.
+          Não inclui painel flutuante, Roteia ou baixas. Mantém a identidade de pacote original.
 
-          A assinatura e a integridade do APK foram verificadas durante a compilação. A operação no aplicativo Anjun instalado precisa ser validada no aparelho.
+          A compilação verifica assinatura, integridade e ausência das capacidades sensíveis no manifesto e DEX.
+          Isso não representa aprovação do Google Play Protect. A instalação e o uso no aparelho físico ainda precisam de validação.
           NOTES
-          gh release create "$release_tag" dist/AnjunAutoInspector-v0.1.1.apk dist/SHA256SUMS.txt --target "$GITHUB_SHA" --title "Anjun Auto Inspector v0.1.1 (build $GITHUB_RUN_NUMBER)" --notes-file "$RUNNER_TEMP/anjun-release-notes.md" --prerelease
+          gh release create "$release_tag" dist/AnjunAutoInspector-v0.2.0-manual.apk dist/SHA256SUMS.txt dist/capabilities.json --target "$GITHUB_SHA" --title "Anjun Auto Inspector v0.2.0-manual (build $GITHUB_RUN_NUMBER)" --notes-file "$RUNNER_TEMP/anjun-release-notes.md" --prerelease
+
